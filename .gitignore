@@ -46,3 +46,9 @@ pip-delete-this-directory.txt
 
 # Jupyter Notebook
 .ipynb_checkpoints
+
+#data
+data/
+rawwav/
+checkpoints
+v
