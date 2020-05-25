@@ -1,5 +1,5 @@
 import torch
-print("imported torch: {torch.__version__}")
+print(f"imported torch: {torch.__version__}")
 from torch import optim
 import torch.nn.functional as F
 from utils import hparams as hp
