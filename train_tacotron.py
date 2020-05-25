@@ -1,4 +1,5 @@
 import torch
+print("imported torch: {torch.__version__}")
 from torch import optim
 import torch.nn.functional as F
 from utils import hparams as hp
@@ -34,7 +35,7 @@ def main():
 
     force_train = args.force_train
     force_gta = args.force_gta
-
+    print("choosing compute device")
     if not args.force_cpu and torch.cuda.is_available():
         device = torch.device('cuda')
         for session in hp.tts_schedule:
@@ -42,6 +43,7 @@ def main():
             if batch_size % torch.cuda.device_count() != 0:
                 raise ValueError('`batch_size` must be evenly divisible by n_gpus!')
     else:
+        print("chose cpu :(")
         device = torch.device('cpu')
     print('Using device:', device)
 
@@ -60,7 +62,7 @@ def main():
                      num_highways=hp.tts_num_highways,
                      dropout=hp.tts_dropout,
                      stop_threshold=hp.tts_stop_threshold).to(device)
-
+    print('Tacotron initialized successfully!')
     optimizer = optim.Adam(model.parameters())
     restore_checkpoint('tts', paths, model, optimizer, create_if_missing=True)
 
