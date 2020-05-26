@@ -41,11 +41,14 @@ def save_checkpoint(checkpoint_type: str, paths: Paths, model, optimizer, *,
             a named checkpoint happens in addition to this update.
     """
     def helper(path_dict, is_named):
+        print(path_dict)
+        GDRIVEPATH = '/content/gdrive/My Drive/wavernn/'
         s = 'named' if is_named else 'latest'
+        for p in path_dict.values():
+            print(p)
         num_exist = sum(p.exists() for p in path_dict.values())
 
         if num_exist not in (0,2):
-            # Checkpoint broken
             raise FileNotFoundError(
                 f'We expected either both or no files in the {s} checkpoint to '
                 'exist, but instead we got exactly one!')
@@ -56,11 +59,18 @@ def save_checkpoint(checkpoint_type: str, paths: Paths, model, optimizer, *,
                 p.parent.mkdir(parents=True, exist_ok=True)
         else:
             if not is_silent: print(f'Saving to existing {s} checkpoint...')
-
+        #save model weights
         if not is_silent: print(f'Saving {s} weights: {path_dict["w"]}')
         model.save(path_dict['w'])
+        if checkpoint_type is 'tts':
+            print("Copying model state to google drive")
+            model.save(GDRIVEPATH + "checkpoints/ljspeech_lsa_smooth_attention.tacotron/"+ + path_dict['w'].split("/")[-1])
+        #save model optimizer
         if not is_silent: print(f'Saving {s} optimizer state: {path_dict["o"]}')
         torch.save(optimizer.state_dict(), path_dict['o'])
+        if checkpoint_type is 'tts':
+            print("Copying optimizer state to google drive")
+            torch.save(optimizer.state_dict(), GDRIVEPATH + "checkpoints/ljspeech_mol.wavernn/" + path_dict['o'].split("/")[-1])
 
     weights_path, optim_path, checkpoint_path = \
         get_checkpoint_paths(checkpoint_type, paths)
@@ -122,6 +132,13 @@ def restore_checkpoint(checkpoint_type: str, paths: Paths, model, optimizer, *,
         model.load(path_dict['w'])
         print(f'Loading {s} optimizer state: {path_dict["o"]}')
         optimizer.load_state_dict(torch.load(path_dict['o']))
+    elif num_exist == 1:
+        print(f'Restoring from {s} checkpoint...')
+        print(f'Loading {s} weights: {path_dict["w"]}')
+        model.load(path_dict['w'])
+        print(f'Creating new {s} optimizer state: {path_dict["o"]}')
+        print(f'Saving {s} optimizer state: {path_dict["o"]}')
+        torch.save(optimizer.state_dict(), path_dict['o'])
     elif create_if_missing:
         save_checkpoint(checkpoint_type, paths, model, optimizer, name=name, is_silent=False)
     else:
