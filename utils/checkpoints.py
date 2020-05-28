@@ -1,8 +1,11 @@
 import torch
 from utils.paths import Paths
 from models.tacotron import Tacotron
-
-
+try:
+    import google.colab
+    COLAB = True     
+except:
+    COLAB= False
 def get_checkpoint_paths(checkpoint_type: str, paths: Paths):
     """
     Returns the correct checkpointing paths
@@ -27,7 +30,7 @@ def get_checkpoint_paths(checkpoint_type: str, paths: Paths):
 
 
 def save_checkpoint(checkpoint_type: str, paths: Paths, model, optimizer, *,
-        name=None, is_silent=False):
+                    name=None, is_silent=False):
     """Saves the training session to disk.
 
     Args:
@@ -48,29 +51,35 @@ def save_checkpoint(checkpoint_type: str, paths: Paths, model, optimizer, *,
             print(p)
         num_exist = sum(p.exists() for p in path_dict.values())
 
-        if num_exist not in (0,2):
+        if num_exist not in (0, 2):
             raise FileNotFoundError(
                 f'We expected either both or no files in the {s} checkpoint to '
                 'exist, but instead we got exactly one!')
 
         if num_exist == 0:
-            if not is_silent: print(f'Creating {s} checkpoint...')
+            if not is_silent:
+                print(f'Creating {s} checkpoint...')
             for p in path_dict.values():
                 p.parent.mkdir(parents=True, exist_ok=True)
         else:
-            if not is_silent: print(f'Saving to existing {s} checkpoint...')
+            if not is_silent:
+                print(f'Saving to existing {s} checkpoint...')
         #save model weights
-        if not is_silent: print(f'Saving {s} weights: {path_dict["w"]}')
+        if not is_silent:
+            print(f'Saving {s} weights: {path_dict["w"]}')
         model.save(path_dict['w'])
-        if checkpoint_type is 'tts':
+        if checkpoint_type is 'tts' and COLAB:
             print("Copying model state to google drive")
-            model.save(GDRIVEPATH + "checkpoints/ljspeech_lsa_smooth_attention.tacotron/"+ + path_dict['w'].split("/")[-1])
+            model.save(
+                GDRIVEPATH + "checkpoints/ljspeech_lsa_smooth_attention.tacotron/latest_weights.pyt")
         #save model optimizer
-        if not is_silent: print(f'Saving {s} optimizer state: {path_dict["o"]}')
+        if not is_silent:
+            print(f'Saving {s} optimizer state: {path_dict["o"]}')
         torch.save(optimizer.state_dict(), path_dict['o'])
-        if checkpoint_type is 'tts':
+        if checkpoint_type is 'tts' and COLAB:
             print("Copying optimizer state to google drive")
-            torch.save(optimizer.state_dict(), GDRIVEPATH + "checkpoints/ljspeech_mol.wavernn/" + path_dict['o'].split("/")[-1])
+            torch.save(optimizer.state_dict(), GDRIVEPATH +
+                       "checkpoints/ljspeech_lsa_smooth_attention.tacotron/latest_optim.pyt")
 
     weights_path, optim_path, checkpoint_path = \
         get_checkpoint_paths(checkpoint_type, paths)
@@ -87,7 +96,7 @@ def save_checkpoint(checkpoint_type: str, paths: Paths, model, optimizer, *,
 
 
 def restore_checkpoint(checkpoint_type: str, paths: Paths, model, optimizer, *,
-        name=None, create_if_missing=False):
+                       name=None, create_if_missing=False):
     """Restores from a training session saved to disk.
 
     NOTE: The optimizer's state is placed on the same device as it's model
@@ -140,6 +149,7 @@ def restore_checkpoint(checkpoint_type: str, paths: Paths, model, optimizer, *,
         print(f'Saving {s} optimizer state: {path_dict["o"]}')
         torch.save(optimizer.state_dict(), path_dict['o'])
     elif create_if_missing:
-        save_checkpoint(checkpoint_type, paths, model, optimizer, name=name, is_silent=False)
+        save_checkpoint(checkpoint_type, paths, model,
+                        optimizer, name=name, is_silent=False)
     else:
         raise FileNotFoundError(f'The {s} checkpoint could not be found!')
