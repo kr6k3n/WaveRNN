@@ -1,11 +1,13 @@
 import torch
 from utils.paths import Paths
 from models.tacotron import Tacotron
+
 try:
     import google.colab
-    COLAB = True     
+    COLAB = False     
 except:
     COLAB= False
+
 def get_checkpoint_paths(checkpoint_type: str, paths: Paths):
     """
     Returns the correct checkpointing paths
@@ -76,10 +78,6 @@ def save_checkpoint(checkpoint_type: str, paths: Paths, model, optimizer, *,
         if not is_silent:
             print(f'Saving {s} optimizer state: {path_dict["o"]}')
         torch.save(optimizer.state_dict(), path_dict['o'])
-        if checkpoint_type is 'tts' and COLAB:
-            print("Copying optimizer state to google drive")
-            torch.save(optimizer.state_dict(), GDRIVEPATH +
-                       "checkpoints/ljspeech_lsa_smooth_attention.tacotron/latest_optim.pyt")
 
     weights_path, optim_path, checkpoint_path = \
         get_checkpoint_paths(checkpoint_type, paths)

@@ -4,6 +4,7 @@ from torch import optim
 import torch.nn.functional as F
 from utils import hparams as hp
 from utils.display import *
+from utils.neptune_util import *
 from utils.dataset import get_tts_datasets
 from utils.text.symbols import symbols
 from utils.paths import Paths
@@ -26,12 +27,19 @@ def main():
     parser = argparse.ArgumentParser(description='Train Tacotron TTS')
     parser.add_argument('--force_train', '-f', action='store_true', help='Forces the model to train past total steps')
     parser.add_argument('--force_gta', '-g', action='store_true', help='Force the model to create GTA features')
+    parser.add_argument('--restore_neptune', '-g', action='store_true', help='Resume training from neptune')
     parser.add_argument('--force_cpu', '-c', action='store_true', help='Forces CPU-only training, even when in CUDA capable environment')
     parser.add_argument('--hp_file', metavar='FILE', default='hparams.py', help='The file to use for the hyperparameters')
     args = parser.parse_args()
 
     hp.configure(args.hp_file)  # Load hparams from file
     paths = Paths(hp.data_path, hp.voc_model_id, hp.tts_model_id)
+
+
+    if args.restore_neptune :
+        print("restoring checkpoints from neptune")
+        get_checkpoint_from_neptune()
+    
 
     force_train = args.force_train
     force_gta = args.force_gta
@@ -156,19 +164,26 @@ def tts_train_loop(paths: Paths, model: Tacotron, optimizer, train_set, lr, trai
 
             step = model.get_step()
             k = step // 1000
-
-            if step % hp.tts_checkpoint_every == 0:
-                ckpt_name = f'taco_step{k}K'
-                save_checkpoint('tts', paths, model, optimizer,
-                                name=ckpt_name, is_silent=True)
+            
+            
 
             if attn_example in ids:
                 idx = ids.index(attn_example)
                 save_attention(np_now(attention[idx][:, :160]), paths.tts_attention/f'{step}')
                 save_spectrogram(np_now(m2_hat[idx]), paths.tts_mel_plot/f'{step}', 600)
 
+            neptune.log_metric("step-loss", step , avg_loss)
+            
+            if step % hp.tts_checkpoint_every == 0:
+                ckpt_name = f'taco_step{k}K'
+                save_checkpoint('tts', paths, model, optimizer,
+                                name=ckpt_name, is_silent=True)
+                save_current_state_to_neptune()
+            
+
             msg = f'| Epoch: {e}/{epochs} ({i}/{total_iters}) | Loss: {avg_loss:#.4} | {speed:#.2} steps/s | Step: {k}k | '
             stream(msg)
+            
 
         # Must save latest optimizer state to ensure that resuming training
         # doesn't produce artifacts
