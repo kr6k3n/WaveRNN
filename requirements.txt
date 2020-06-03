@@ -5,3 +5,4 @@ unidecode
 inflect
 nltk
 num2words
+neptune-client
