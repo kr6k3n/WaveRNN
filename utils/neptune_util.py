@@ -30,7 +30,8 @@ def resume_experiment():
 
 def save_current_state_to_neptune(neptune):
     neptune.delete_artifacts("checkpoints.zip")
-    os.remove(CHECKPOINT_DIR+".zip")
+    if os.path.exists(CHECKPOINT_DIR+".zip"):
+        os.remove(CHECKPOINT_DIR+".zip")
     zip_util.compress_filepath(CHECKPOINT_DIR)
     neptune.send_artifact(CHECKPOINT_DIR+".zip", "checkpoints.zip")
 
