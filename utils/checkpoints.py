@@ -46,7 +46,6 @@ def save_checkpoint(checkpoint_type: str, paths: Paths, model, optimizer, *,
             a named checkpoint happens in addition to this update.
     """
     def helper(path_dict, is_named):
-        print(path_dict)
         GDRIVEPATH = '/content/gdrive/My Drive/wavernn/'
         s = 'named' if is_named else 'latest'
         for p in path_dict.values():

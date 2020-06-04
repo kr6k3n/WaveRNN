@@ -6,8 +6,6 @@ COLAB_PATH = "/content/WaveRNN/"
 
 EXPERIMENT_NAME = 'training'
 CHECKPOINT_DIR = COLAB_PATH + 'checkpoints'
-neptune = None
-
 
 
 def get_experiment():
@@ -21,16 +19,16 @@ def get_experiment():
 
 
 def init_experiment():
-    global neptune
-    neptune = nt.create_experiment(name=EXPERIMENT_NAME)
+    return nt.create_experiment(name=EXPERIMENT_NAME)
+
 
 def resume_experiment():
-    global neptune
     session = nt.sessions.Session()
     project = session.get_project(project_qualified_name='kr6k3n/TTS')
-    neptune = project.get_experiments()[-1] # get last experiment
+    return project.get_experiments()[-1]  #  get last experiment
 
-def save_current_state_to_neptune():
+
+def save_current_state_to_neptune(neptune):
     neptune.delete_artifacts("checkpoints.zip")
     os.remove(CHECKPOINT_DIR+".zip")
     zip_util.compress_filepath(CHECKPOINT_DIR)
@@ -40,3 +38,6 @@ def save_current_state_to_neptune():
 def get_checkpoint_from_neptune():
     neptune.download_artifact("checkpoints.zip", CHECKPOINT_DIR+".zip")
     zip_util.decompress_filepath(CHECKPOINT_DIR+".zip")
+
+
+nt.init(project_qualified_name="kr6k3n/TTS")

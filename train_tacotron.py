@@ -1,22 +1,22 @@
+from utils.checkpoints import save_checkpoint, restore_checkpoint
+import sys
+import numpy as np
+import time
+from pathlib import Path
+import os
+from utils import data_parallel_workaround
+import argparse
+from models.tacotron import Tacotron
+from utils.paths import Paths
+from utils.text.symbols import symbols
+from utils.dataset import get_tts_datasets
+from utils.neptune_util import *
+from utils.display import *
+from utils import hparams as hp
+import torch.nn.functional as F
+from torch import optim
 import torch
 print(f"imported torch: {torch.__version__}")
-from torch import optim
-import torch.nn.functional as F
-from utils import hparams as hp
-from utils.display import *
-from utils.neptune_util import *
-from utils.dataset import get_tts_datasets
-from utils.text.symbols import symbols
-from utils.paths import Paths
-from models.tacotron import Tacotron
-import argparse
-from utils import data_parallel_workaround
-import os
-from pathlib import Path
-import time
-import numpy as np
-import sys
-from utils.checkpoints import save_checkpoint, restore_checkpoint
 
 
 def np_now(x: torch.Tensor): return x.detach().cpu().numpy()
@@ -25,25 +25,31 @@ def np_now(x: torch.Tensor): return x.detach().cpu().numpy()
 def main():
     # Parse Arguments
     parser = argparse.ArgumentParser(description='Train Tacotron TTS')
-    parser.add_argument('--force_train', '-f', action='store_true', help='Forces the model to train past total steps')
-    parser.add_argument('--force_gta', '-g', action='store_true', help='Force the model to create GTA features')
-    parser.add_argument('--use_tpu', '-tpu', action='store_true', help='Use Colab TPU for faster training')
-    parser.add_argument('--restore_neptune', '-rn', action='store_true', help='Resume training from neptune')
-    parser.add_argument('--force_cpu', '-c', action='store_true', help='Forces CPU-only training, even when in CUDA capable environment')
-    parser.add_argument('--hp_file', metavar='FILE', default='hparams.py', help='The file to use for the hyperparameters')
+    parser.add_argument('--force_train', '-f', action='store_true',
+                        help='Forces the model to train past total steps')
+    parser.add_argument('--force_gta', '-g', action='store_true',
+                        help='Force the model to create GTA features')
+    parser.add_argument('--use_tpu', '-tpu', action='store_true',
+                        help='Use Colab TPU for faster training')
+    parser.add_argument('--restore_neptune', '-rn',
+                        action='store_true', help='Resume training from neptune')
+    parser.add_argument('--force_cpu', '-c', action='store_true',
+                        help='Forces CPU-only training, even when in CUDA capable environment')
+    parser.add_argument('--hp_file', metavar='FILE', default='hparams.py',
+                        help='The file to use for the hyperparameters')
     args = parser.parse_args()
 
     hp.configure(args.hp_file)  # Load hparams from file
     paths = Paths(hp.data_path, hp.voc_model_id, hp.tts_model_id)
 
-
-    if args.restore_neptune :
+    neptune = None
+    if args.restore_neptune:
         print("restoring checkpoints from neptune")
-        get_checkpoint_from_neptune()
+        neptune = get_checkpoint_from_neptune()
 
     else:
-        init_experiment()
-    
+        neptune = init_experiment()
+    print(neptune)
     force_train = args.force_train
     force_gta = args.force_gta
 
@@ -52,14 +58,16 @@ def main():
         import torch_xla
         import torch_xla.core.xla_model as xm
         device = xm.xla_device()
+        print("If Only You Knew The Power Of The Dark Side...")
     elif torch.cuda.is_available():
         device = torch.device('cuda')
         for session in hp.tts_schedule:
             _, _, _, batch_size = session
             if batch_size % torch.cuda.device_count() != 0:
-                raise ValueError('`batch_size` must be evenly divisible by n_gpus!')
+                raise ValueError(
+                    '`batch_size` must be evenly divisible by n_gpus!')
     else:
-        print("chose cpu :(")
+        print("chose cpu :((")
         device = torch.device('cpu')
     print('Using device:', device)
 
@@ -108,16 +116,17 @@ def main():
             model.r = r
 
             simple_table([(f'Steps with r={r}', str(training_steps//1000) + 'k Steps'),
-                            ('Batch Size', batch_size),
-                            ('Learning Rate', lr),
-                            ('Outputs/Step (r)', model.r)])
+                          ('Batch Size', batch_size),
+                          ('Learning Rate', lr),
+                          ('Outputs/Step (r)', model.r)])
 
-            train_set, attn_example = get_tts_datasets(paths.data, batch_size, r)
-            tts_train_loop(paths, model, optimizer, train_set, lr, training_steps, attn_example)
+            train_set, attn_example = get_tts_datasets(
+                paths.data, batch_size, r)
+            tts_train_loop(paths, model, optimizer, train_set,
+                           lr, training_steps, attn_example, neptune)
 
         print('Training Complete.')
         print('To continue training increase tts_total_steps in hparams.py or use --force_train\n')
-
 
     print('Creating Ground Truth Aligned Dataset...\n')
 
@@ -127,10 +136,12 @@ def main():
     print('\n\nYou can now train WaveRNN on GTA features - use python train_wavernn.py --gta\n')
 
 
-def tts_train_loop(paths: Paths, model: Tacotron, optimizer, train_set, lr, train_steps, attn_example):
-    device = next(model.parameters()).device  # use same device as model parameters
+def tts_train_loop(paths: Paths, model: Tacotron, optimizer, train_set, lr, train_steps, attn_example, neptune):
+    # use same device as model parameters
+    device = next(model.parameters()).device
 
-    for g in optimizer.param_groups: g['lr'] = lr
+    for g in optimizer.param_groups:
+        g['lr'] = lr
 
     total_iters = len(train_set)
     epochs = train_steps // total_iters + 1
@@ -147,7 +158,8 @@ def tts_train_loop(paths: Paths, model: Tacotron, optimizer, train_set, lr, trai
 
             # Parallelize model onto GPUS using workaround due to python bug
             if device.type == 'cuda' and torch.cuda.device_count() > 1:
-                m1_hat, m2_hat, attention = data_parallel_workaround(model, x, m)
+                m1_hat, m2_hat, attention = data_parallel_workaround(
+                    model, x, m)
             else:
                 m1_hat, m2_hat, attention = model(x, m)
 
@@ -159,7 +171,8 @@ def tts_train_loop(paths: Paths, model: Tacotron, optimizer, train_set, lr, trai
             optimizer.zero_grad()
             loss.backward()
             if hp.tts_clip_grad_norm is not None:
-                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), hp.tts_clip_grad_norm)
+                grad_norm = torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), hp.tts_clip_grad_norm)
                 if np.isnan(grad_norm):
                     print('grad_norm was NaN!')
 
@@ -172,26 +185,25 @@ def tts_train_loop(paths: Paths, model: Tacotron, optimizer, train_set, lr, trai
 
             step = model.get_step()
             k = step // 1000
-            
-            
 
             if attn_example in ids:
                 idx = ids.index(attn_example)
-                save_attention(np_now(attention[idx][:, :160]), paths.tts_attention/f'{step}')
-                save_spectrogram(np_now(m2_hat[idx]), paths.tts_mel_plot/f'{step}', 600)
+                attention_img = np_now(attention[idx][:, :160])
+                spectrogram_img = np_now(m2_hat[idx])
+                save_attention(attention_img, paths.tts_attention/f'{step}')
+                save_spectrogram(
+                    spectrogram_img, paths.tts_mel_plot/f'{step}', 600)
 
-            neptune.log_metric("step-loss", step , avg_loss)
-            
+            neptune.log_metric("step-loss", step, avg_loss)
+
             if step % hp.tts_checkpoint_every == 0:
                 ckpt_name = f'taco_step{k}K'
                 save_checkpoint('tts', paths, model, optimizer,
                                 name=ckpt_name, is_silent=True)
-                save_current_state_to_neptune()
-            
+                save_current_state_to_neptune(neptune)
 
             msg = f'| Epoch: {e}/{epochs} ({i}/{total_iters}) | Loss: {avg_loss:#.4} | {speed:#.2} steps/s | Step: {k}k | '
             stream(msg)
-            
 
         # Must save latest optimizer state to ensure that resuming training
         # doesn't produce artifacts
@@ -201,7 +213,8 @@ def tts_train_loop(paths: Paths, model: Tacotron, optimizer, train_set, lr, trai
 
 
 def create_gta_features(model: Tacotron, train_set, save_path: Path):
-    device = next(model.parameters()).device  # use same device as model parameters
+    # use same device as model parameters
+    device = next(model.parameters()).device
 
     iters = len(train_set)
 
@@ -209,7 +222,8 @@ def create_gta_features(model: Tacotron, train_set, save_path: Path):
 
         x, mels = x.to(device), mels.to(device)
 
-        with torch.no_grad(): _, gta, _ = model(x, mels)
+        with torch.no_grad():
+            _, gta, _ = model(x, mels)
 
         gta = gta.cpu().numpy()
 
