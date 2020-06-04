@@ -27,6 +27,7 @@ def main():
     parser = argparse.ArgumentParser(description='Train Tacotron TTS')
     parser.add_argument('--force_train', '-f', action='store_true', help='Forces the model to train past total steps')
     parser.add_argument('--force_gta', '-g', action='store_true', help='Force the model to create GTA features')
+    parser.add_argument('--use_tpu', '-tpu', action='store_true', help='Use Colab TPU for faster training')
     parser.add_argument('--restore_neptune', '-g', action='store_true', help='Resume training from neptune')
     parser.add_argument('--force_cpu', '-c', action='store_true', help='Forces CPU-only training, even when in CUDA capable environment')
     parser.add_argument('--hp_file', metavar='FILE', default='hparams.py', help='The file to use for the hyperparameters')
@@ -39,12 +40,19 @@ def main():
     if args.restore_neptune :
         print("restoring checkpoints from neptune")
         get_checkpoint_from_neptune()
+        
+    else:
+        init_experiment()
     
-
     force_train = args.force_train
     force_gta = args.force_gta
+
     print("choosing compute device")
-    if not args.force_cpu and torch.cuda.is_available():
+    if (not args.force_cpu) and args.use_tpu:
+        import torch_xla
+        import torch_xla.core.xla_model as xm
+        device = xm.xla_device()
+    elif torch.cuda.is_available():
         device = torch.device('cuda')
         for session in hp.tts_schedule:
             _, _, _, batch_size = session
