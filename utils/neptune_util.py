@@ -34,8 +34,8 @@ def save_current_state_to_neptune(neptune):
 
 
 def get_checkpoint_from_neptune():
-    resume_experiment().download_artifacts("checkpoints", CHECKPOINT_DIR+".zip")
-    zip_util.decompress_filepath(COLAB_PATH)
+    resume_experiment().download_artifacts("checkpoints", COLAB_PATH )
+    zip_util.decompress_filepath(CHECKPOINT_DIR+".zip")
 
 
 nt.init(project_qualified_name="kr6k3n/TTS")
