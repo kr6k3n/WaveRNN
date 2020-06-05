@@ -29,14 +29,13 @@ def resume_experiment():
 
 
 def save_current_state_to_neptune(neptune):
-    neptune.delete_artifacts("checkpoints")
-    for p in zip_util.get_all_file_paths(CHECKPOINT_DIR):
+    for path in zip_util.get_all_file_paths(CHECKPOINT_DIR):
         neptune.send_artifact(path, path.replace(COLAB_PATH, ""))
 
 
 def get_checkpoint_from_neptune():
-    resume_experiment().download_artifact("checkpoints.zip", CHECKPOINT_DIR+".zip")
-    zip_util.decompress_filepath(CHECKPOINT_DIR+".zip")
+    resume_experiment().download_artifacts("checkpoints", CHECKPOINT_DIR+".zip")
+    zip_util.decompress_filepath(COLAB_PATH)
 
 
 nt.init(project_qualified_name="kr6k3n/TTS")

@@ -101,7 +101,7 @@ tts_max_mel_len = 1250
 tts_bin_lengths = True
 # clips the gradient norm to prevent explosion - set to None if not needed
 tts_clip_grad_norm = 1.0
-tts_checkpoint_every = 2_000        # checkpoints the model every X steps
+tts_checkpoint_every = 500        # checkpoints the model every X steps
 # TODO: tts_phoneme_prob = 0.0              # [0 <-> 1] probability for feeding model phonemes vrs graphemes
 
 

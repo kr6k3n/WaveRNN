@@ -48,8 +48,6 @@ def save_checkpoint(checkpoint_type: str, paths: Paths, model, optimizer, *,
     def helper(path_dict, is_named):
         GDRIVEPATH = '/content/gdrive/My Drive/wavernn/'
         s = 'named' if is_named else 'latest'
-        for p in path_dict.values():
-            print(p)
         num_exist = sum(p.exists() for p in path_dict.values())
 
         if num_exist not in (0, 2):

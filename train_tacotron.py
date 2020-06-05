@@ -188,7 +188,7 @@ def tts_train_loop(paths: Paths, model: Tacotron, optimizer, train_set, lr, trai
                 idx = ids.index(attn_example)
                 attention_img = np_now(attention[idx][:, :160])
                 spectrogram_img = np_now(m2_hat[idx])
-                
+
                 save_attention(attention_img, paths.tts_attention/f'{step}')
                 save_spectrogram(
                     spectrogram_img, paths.tts_mel_plot/f'{step}', 600)
