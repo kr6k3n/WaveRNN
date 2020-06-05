@@ -29,15 +29,13 @@ def resume_experiment():
 
 
 def save_current_state_to_neptune(neptune):
-    neptune.delete_artifacts("checkpoints.zip")
-    if os.path.exists(CHECKPOINT_DIR+".zip"):
-        os.remove(CHECKPOINT_DIR+".zip")
-    zip_util.compress_filepath(CHECKPOINT_DIR)
-    neptune.send_artifact(CHECKPOINT_DIR+".zip", "checkpoints.zip")
+    neptune.delete_artifacts("checkpoints")
+    for p in zip_util.get_all_file_paths(CHECKPOINT_DIR):
+        neptune.send_artifact(path, path.replace(COLAB_PATH, ""))
 
 
 def get_checkpoint_from_neptune():
-    neptune.download_artifact("checkpoints.zip", CHECKPOINT_DIR+".zip")
+    resume_experiment().download_artifact("checkpoints.zip", CHECKPOINT_DIR+".zip")
     zip_util.decompress_filepath(CHECKPOINT_DIR+".zip")
 
 

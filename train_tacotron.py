@@ -45,10 +45,8 @@ def main():
     neptune = None
     if args.restore_neptune:
         print("restoring checkpoints from neptune")
-        neptune = get_checkpoint_from_neptune()
-
-    else:
-        neptune = init_experiment()
+        get_checkpoint_from_neptune()
+    neptune = init_experiment()
     print(neptune)
     force_train = args.force_train
     force_gta = args.force_gta
