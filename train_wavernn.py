@@ -1,6 +1,7 @@
 import time
 import numpy as np
 import torch
+print(f"imported torch: {torch.__version__}")
 from torch import optim
 import torch.nn.functional as F
 from utils.display import stream, simple_table
@@ -33,6 +34,12 @@ def main():
     if args.batch_size is None:
         args.batch_size = hp.voc_batch_size
 
+    if args.restore_neptune:
+        print("restoring checkpoints from neptune")
+        get_checkpoint_from_neptune()
+    neptune = init_experiment()
+    print(neptune)
+
     paths = Paths(hp.data_path, hp.voc_model_id, hp.tts_model_id)
 
     batch_size = args.batch_size
@@ -40,15 +47,25 @@ def main():
     train_gta = args.gta
     lr = args.lr
 
-    if not args.force_cpu and torch.cuda.is_available():
+    iprint("choosing compute device")
+    if (not args.force_cpu) and args.use_tpu:
+        import torch_xla
+        import torch_xla.core.xla_model as xm
+        device = xm.xla_device()
+        print("If Only You Knew The Power Of The Dark Side...")
+    elif torch.cuda.is_available():
         device = torch.device('cuda')
-        if batch_size % torch.cuda.device_count() != 0:
-            raise ValueError('`batch_size` must be evenly divisible by n_gpus!')
+        for session in hp.tts_schedule:
+            _, _, _, batch_size = session
+            if batch_size % torch.cuda.device_count() != 0:
+                raise ValueError(
+                    '`batch_size` must be evenly divisible by n_gpus!')
     else:
+        print("chose cpu :((")
         device = torch.device('cpu')
     print('Using device:', device)
 
-    print('\nInitialising Model...\n')
+    print('\nInitialising WaveRNN Model...\n')
 
     # Instantiate WaveRNN Model
     voc_model = WaveRNN(rnn_dims=hp.voc_rnn_dims,
@@ -63,7 +80,8 @@ def main():
                         hop_length=hp.hop_length,
                         sample_rate=hp.sample_rate,
                         mode=hp.voc_mode).to(device)
-
+    print('Tacotron initialized successfully!')
+    
     # Check to make sure the hop length is correctly factorised
     assert np.cumprod(hp.voc_upsample_factors)[-1] == hp.hop_length
 
@@ -82,13 +100,13 @@ def main():
 
     loss_func = F.cross_entropy if voc_model.mode == 'RAW' else discretized_mix_logistic_loss
 
-    voc_train_loop(paths, voc_model, loss_func, optimizer, train_set, test_set, lr, total_steps)
+    voc_train_loop(paths, voc_model, loss_func, optimizer, train_set, test_set, lr, total_steps, neptune)
 
     print('Training Complete.')
     print('To continue training increase voc_total_steps in hparams.py or use --force_train')
 
 
-def voc_train_loop(paths: Paths, model: WaveRNN, loss_func, optimizer, train_set, test_set, lr, total_steps):
+def voc_train_loop(paths: Paths, model: WaveRNN, loss_func, optimizer, train_set, test_set, lr, total_steps, neptune):
     # Use same device as model parameters
     device = next(model.parameters()).device
 
@@ -138,12 +156,15 @@ def voc_train_loop(paths: Paths, model: WaveRNN, loss_func, optimizer, train_set
             step = model.get_step()
             k = step // 1000
 
+            neptune.log_metric("step-loss", step, avg_loss)
+
             if step % hp.voc_checkpoint_every == 0:
                 gen_testset(model, test_set, hp.voc_gen_at_checkpoint, hp.voc_gen_batched,
                             hp.voc_target, hp.voc_overlap, paths.voc_output)
                 ckpt_name = f'wave_step{k}K'
                 save_checkpoint('voc', paths, model, optimizer,
                                 name=ckpt_name, is_silent=True)
+                save_current_state_to_neptune(neptune)
 
             msg = f'| Epoch: {e}/{epochs} ({i}/{total_iters}) | Loss: {avg_loss:.4f} | {speed:.1f} steps/s | Step: {k}k | '
             stream(msg)

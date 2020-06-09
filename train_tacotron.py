@@ -42,7 +42,6 @@ def main():
     hp.configure(args.hp_file)  # Load hparams from file
     paths = Paths(hp.data_path, hp.voc_model_id, hp.tts_model_id)
 
-    neptune = None
     if args.restore_neptune:
         print("restoring checkpoints from neptune")
         get_checkpoint_from_neptune()
